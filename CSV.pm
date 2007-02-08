@@ -12,6 +12,9 @@ use warnings;
 
 BEGIN {
   ## Modules
+  # Core
+  use Carp qw/confess/;
+
   # Base
   use base qw(Class::Accessor);
 
@@ -21,13 +24,13 @@ BEGIN {
 
   ## Variables
   use vars qw($VERSION);
-  $VERSION = do { my @r=(q$Revision: 1.2 $=~/\d+/g); sprintf "%d."."%02d"x$#r,@r};
+  $VERSION = do { my @r=(q$Revision: 1.3 $=~/\d+/g); sprintf "%d."."%02d"x$#r,@r};
 }
 
 sub _build_fields {
   my ($self, $fields) = @_;
 
-  die "Field list must be an array reference\n"
+  confess "Field list must be an array reference\n"
     unless (defined $fields and ref $fields eq 'ARRAY');
 
   $self->{_field_list} = $fields;
@@ -37,7 +40,6 @@ sub _build_fields {
 
   foreach my $field (@{$fields}) {
     $self->{__fields}->{$field} = TRUE;
-    $self->SUPER::set($field, undef);
   }
 }
 
@@ -46,11 +48,17 @@ sub set {
 
   foreach my $field (keys %items) {
     if (exists $self->{__fields}->{$field}) {
-      $self->SUPER::set($field, $items{$field});
+      $self->_set($field, $items{$field});
     } else {
-      die "Cannot set field: ". $field. " as it doesnt exist!\n";
+      confess "Cannot set field: ". $field. " as it doesnt exist!\n";
     }
   }
+}
+
+sub _set {
+  my ($self, $key, $value) = @_;
+
+  return $self->{$key} = $value;
 }
 
 sub get {
@@ -59,11 +67,23 @@ sub get {
   # sanity check
   foreach my $field (@fields) {
     unless (exists $self->{__fields}->{$field}) {
-      die "Cannot get field: ". $field. " as it doesnt exist!\n";
+      confess "Cannot get field: ". $field. " as it doesnt exist!\n";
     }
   }
 
-  return $self->SUPER::get(@fields);
+  return $self->_get(@fields);
+}
+
+sub _get {
+  my $self = shift;
+
+  if(@_ == 1) {
+    return $self->{$_[0]};
+  } elsif( @_ > 1 ) {
+    return @{$self}{@_};
+  }
+
+  return;
 }
 
 1;
@@ -72,6 +92,10 @@ sub get {
 package Class::CSV::CSV_XS_Options;
 
 BEGIN {
+  ## Modules
+  # Core
+  use Carp qw/confess/;
+
   ## Constants
   use constant TRUE => 1;
   use constant FALSE => 0;
@@ -92,7 +116,7 @@ sub new {
     if (ref $opts eq 'HASH') {
       $self->set(%{$opts});
     } else {
-      die "Please provide csv_xs_options as a HASH ref!\n";
+      confess "Please provide csv_xs_options as a HASH ref!\n";
     }
   }
 
@@ -107,7 +131,7 @@ sub set {
       $self->{__fields}->{$field} = TRUE;
       $self->mk_accessors($field);
     }
-    $self->SUPER::set($field => $items{$field});
+    $self->_set($field => $items{$field});
   }
 }
 
@@ -130,6 +154,9 @@ package Class::CSV::Line;
 
 BEGIN {
   ## Modules
+  # Core
+  use Carp qw/confess/;
+
   # CPAN
   use Text::CSV_XS;
 
@@ -144,7 +171,7 @@ BEGIN {
 sub new {
   my ($class, %opts) = @_;
 
-  die "Please provide a list of fields\n"
+  confess "Please provide a list of fields\n"
     unless (exists $opts{fields});
 
   my $self = bless({}, $class);
@@ -160,10 +187,10 @@ sub new {
 sub parse {
   my ($class, %opts) = @_;
 
-  die "Please provide a line to parse\n"
+  confess "Please provide a line to parse\n"
     unless (exists $opts{line});
 
-  my $self = __PACKAGE__->new(%opts);
+  my $self = $class->new(%opts);
 
   $self->_do_parse($opts{line});
 
@@ -173,7 +200,7 @@ sub parse {
 sub _build_fields {
   my ($self, $fields) = @_;
 
-  die "Field list must be an array reference\n"
+  confess "Field list must be an array reference\n"
     unless (defined $fields and ref $fields eq 'ARRAY');
 
   $self->{_field_list} = $fields;
@@ -183,14 +210,14 @@ sub _build_fields {
 
   foreach my $field (@{$fields}) {
     $self->{__fields}->{$field} = TRUE;
-    $self->SUPER::set($field, undef);
+    $self->_set($field, undef);
   }
 }
 
 sub _do_parse {
   my ($self, $line) = @_;
 
-  die "Unable to find field array ref to build object with\n"
+  confess "Unable to find field array ref to build object with\n"
     unless (defined $self->{_field_list}
       and ref $self->{_field_list} eq 'ARRAY');
 
@@ -199,13 +226,13 @@ sub _do_parse {
   if (defined $r and $r) {
     my @columns = $csv->fields();
     for (my $i = 0; $i < @columns; $i++) {
-      $self->SUPER::set(${$self->{_field_list}}[$i], $columns[$i]);
+      $self->set(${$self->{_field_list}}[$i], $columns[$i]);
     }
   } else {
     if ($csv->error_input()) {
-      die "Failed to parse line: ". $csv->error_input(). "\n";
+      confess "Failed to parse line: ". $csv->error_input(). "\n";
     } else {
-      die "Failed to parse line: unknown reason\n";
+      confess "Failed to parse line: unknown reason\n";
     }
   }
 }
@@ -213,13 +240,13 @@ sub _do_parse {
 sub string {
   my ($self) = @_;
 
-  die "Uninitiated Line Objects cannot be converted to a string!\n"
+  confess "Uninitiated Line Objects cannot be converted to a string!\n"
     unless (exists $self->{_field_list}
     and ref $self->{_field_list} eq 'ARRAY');
 
   my @cols = ();
   foreach my $field (@{$self->{_field_list}}) {
-    push(@cols, $self->SUPER::get($field));
+    push(@cols, $self->_get($field));
   }
 
   my $csv = new Text::CSV_XS($self->{__csv_xs_options}->to_hash_ref());
@@ -227,7 +254,7 @@ sub string {
   if ($r) {
     return $csv->string();
   } else {
-    die "Failed to create CSV line from line: ". $csv->error_input(). "\n"
+    confess "Failed to create CSV line from line: ". $csv->error_input(). "\n"
   }
 }
 
@@ -239,6 +266,9 @@ package Class::CSV;
 
 BEGIN {
   ## Modules
+  # Core
+  use Carp qw/confess/;
+
   # Base
   use base qw(Class::CSV::Base);
 
@@ -258,7 +288,7 @@ sub new {
 
   my $self = bless({}, $class);
 
-  die "Please provide an array ref of fields\n"
+  confess "Please provide an array ref of fields\n"
     unless (exists $opts{fields}
       and ref $opts{fields} eq 'ARRAY');
 
@@ -276,7 +306,7 @@ sub new {
 sub parse {
   my ($class, %opts) = @_;
 
-  my $self = __PACKAGE__->new(%opts);
+  my $self = $class->new(%opts);
 
   if (exists $opts{classdbi_objects}) {
     $opts{objects} = $opts{classdbi_objects};
@@ -288,7 +318,7 @@ sub parse {
   } elsif (exists $opts{objects}) {
     $self->_do_parse_objects(%opts);
   } else {
-    die "Please provide objects or a filename/filehandle to parse\n";
+    confess "Please provide objects or a filename/filehandle to parse\n";
   }
 
   return $self;
@@ -299,25 +329,25 @@ sub _do_parse {
 
   my @CSV_Content = ();
   if (exists $opts{'filename'} and defined $opts{'filename'}) {
-    die "Cannot find filename: ". $opts{'filename'}. "\n"
+    confess "Cannot find filename: ". $opts{'filename'}. "\n"
       unless (-f $opts{'filename'});
-    die "Cannot read filename: ". $opts{'filename'}. "\n"
+    confess "Cannot read filename: ". $opts{'filename'}. "\n"
       unless (-r $opts{'filename'});
     open(CSV, $opts{'filename'})
-      or die "Failed to open filename: ". $opts{'filename'}. ': '. $!. "\n";
+      or confess "Failed to open filename: ". $opts{'filename'}. ': '. $!. "\n";
     while (my $line = <CSV>) {
       push(@CSV_Content, $self->strip_crlf($line));
     }
     close(CSV);
   } elsif (exists $opts{'filehandle'} and defined $opts{'filehandle'}) {
-    die "filehandle provided is not a file handle\n"
+    confess "filehandle provided is not a file handle\n"
       unless (defined(fileno($opts{'filehandle'})));
     my $fh = $opts{'filehandle'};
     while (my $line = <$fh>) {
       push(@CSV_Content, $self->strip_crlf($line));
     }
   } else {
-    die "Please provide a filename/filehandle to parse\n";
+    confess "Please provide a filename/filehandle to parse\n";
   }
 
   foreach my $line (@CSV_Content) {
@@ -332,14 +362,14 @@ sub _do_parse {
 sub _do_parse_objects {
   my ($self, %opts) = @_;
 
-  die "Please specify objects as an ARRAY ref!\n"
+  confess "Please specify objects as an ARRAY ref!\n"
     unless (ref $opts{objects} eq 'ARRAY');
 
   foreach my $object (@{$opts{objects}}) {
     my $line = $self->new_line();
 
     foreach my $field (@{$self->fields()}) {
-      die ((ref $object). " does not contain method ". $field. "\n")
+      confess ((ref $object). " does not contain method ". $field. "\n")
         unless ($object->can($field));
 
       $line->set( $field => $object->$field );
@@ -363,7 +393,7 @@ sub new_line {
     %opts
   );
 
-  die "Failed to create new line\n"
+  confess "Failed to create new line\n"
     unless ($line);
 
   if (defined $args) {
@@ -378,7 +408,7 @@ sub new_line {
         $line->set( $field => $args->{$field} );
       }
     } else {
-      die "Need the arguments passed as either an ARRAY ref or a HASH ref!\n";
+      confess "Need the arguments passed as either an ARRAY ref or a HASH ref!\n";
     }
   }
 
@@ -388,7 +418,7 @@ sub new_line {
 sub add_line {
   my ($self, $args) = @_;
 
-  die "Cannot call add_line without an argument!\n"
+  confess "Cannot call add_line without an argument!\n"
     unless (defined $args and $args);
 
   my $line = $self->new_line($args);
@@ -399,7 +429,7 @@ sub add_line {
 sub string {
   my ($self) = @_;
 
-  die "No lines to write!\n" unless (ref $self->lines() eq 'ARRAY');
+  confess "No lines to write!\n" unless (ref $self->lines() eq 'ARRAY');
 
   my @string = ();
   map { push(@string, $_->string()); } @{$self->lines()};
